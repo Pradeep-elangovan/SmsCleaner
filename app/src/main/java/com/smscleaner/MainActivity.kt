@@ -1,8 +1,8 @@
 package com.smscleaner
 
 import android.Manifest
-import android.app.RoleManager
 import android.app.TimePickerDialog
+import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
