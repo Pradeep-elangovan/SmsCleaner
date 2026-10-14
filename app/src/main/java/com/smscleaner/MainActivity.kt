@@ -35,6 +35,9 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refresh() }
     private val notifLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val smsPermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refresh() }
+    private var askedSmsPerm = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,12 +99,38 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        if (SmsRepository.isDefault(this) && !hasSmsPermission() && !askedSmsPerm) {
+            askedSmsPerm = true
+            smsPermLauncher.launch(
+                arrayOf(
+                    Manifest.permission.READ_SMS,
+                    Manifest.permission.RECEIVE_SMS,
+                    Manifest.permission.SEND_SMS,
+                )
+            )
+        }
     }
+
+    private fun hasSmsPermission() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) ==
+            PackageManager.PERMISSION_GRANTED
 
     private fun refresh() {
         val def = SmsRepository.isDefault(this)
-        tvStatus.text = "Default SMS app: " + (if (def) "Yes" else "No") +
+        val perm = hasSmsPermission()
+        val base = "Default SMS app: " + (if (def) "Yes" else "No") +
+            "\nSMS permission: " + (if (perm) "granted" else "missing") +
             "\nLast run: " + store.lastRun.ifEmpty { "never" }
+        tvStatus.text = base
+        if (def && perm) {
+            Thread {
+                val n = SmsRepository.count(applicationContext)
+                runOnUiThread {
+                    tvStatus.text = base + "\nMessages visible to app: " +
+                        (if (n < 0) "error reading" else n.toString())
+                }
+            }.start()
+        }
         btnDefault.text = if (def) "Change default SMS app" else "Set as default SMS app"
         btnTime.text = String.format(Locale.US, "%02d:%02d", store.runHour, store.runMinute)
         rules = store.load()

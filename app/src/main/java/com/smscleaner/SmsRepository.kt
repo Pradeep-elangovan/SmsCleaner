@@ -35,6 +35,15 @@ object SmsRepository {
         type = c.getInt(5),
     )
 
+    /** Number of inbox + sent messages the app can see, or -1 if reading failed. */
+    fun count(ctx: Context): Int = try {
+        ctx.contentResolver.query(
+            Telephony.Sms.CONTENT_URI, arrayOf("_id"), "type IN (1,2)", null, null
+        )?.use { it.count } ?: -1
+    } catch (e: Exception) {
+        -1
+    }
+
     /** Latest inbox + sent messages, newest first. */
     fun recent(ctx: Context, limit: Int): List<Sms> {
         val out = ArrayList<Sms>()

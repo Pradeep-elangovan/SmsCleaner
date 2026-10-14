@@ -31,6 +31,13 @@ class InboxActivity : AppCompatActivity() {
         } catch (e: SecurityException) {
             emptyList()
         }
+        if (items.isEmpty()) {
+            Toast.makeText(
+                this,
+                "No messages found. Check the SMS permission line on the main screen.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
         val fmt = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault())
 
         list.adapter = object : ArrayAdapter<Sms>(
