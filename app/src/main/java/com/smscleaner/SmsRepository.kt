@@ -2,7 +2,10 @@ package com.smscleaner
 
 import android.content.Context
 import android.database.Cursor
+import android.app.role.RoleManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.provider.Telephony
 import java.io.File
 import java.text.SimpleDateFormat
@@ -23,8 +26,37 @@ object SmsRepository {
     private val COLS = arrayOf("_id", "address", "body", "date", "read", "type")
     private const val DAY_MS = 24L * 60 * 60 * 1000
 
-    fun isDefault(ctx: Context): Boolean =
-        Telephony.Sms.getDefaultSmsPackage(ctx) == ctx.packageName
+    private fun telephonyDefault(ctx: Context): String? = try {
+        Telephony.Sms.getDefaultSmsPackage(ctx)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun roleHeld(ctx: Context): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 29) {
+            ctx.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
+        } else false
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun settingDefault(ctx: Context): String? = try {
+        Settings.Secure.getString(ctx.contentResolver, "sms_default_application")
+    } catch (e: Exception) {
+        null
+    }
+
+    /** True if any of the three system sources says this app is the default SMS app. */
+    fun isDefault(ctx: Context): Boolean {
+        val me = ctx.packageName
+        return telephonyDefault(ctx) == me || roleHeld(ctx) || settingDefault(ctx) == me
+    }
+
+    /** Short text showing what each source reports, for troubleshooting. */
+    fun diagnostics(ctx: Context): String =
+        "telephony=" + (telephonyDefault(ctx) ?: "null") +
+            ", role=" + roleHeld(ctx) +
+            ", setting=" + (settingDefault(ctx) ?: "null")
 
     private fun fromCursor(c: Cursor): Sms = Sms(
         id = c.getLong(0),

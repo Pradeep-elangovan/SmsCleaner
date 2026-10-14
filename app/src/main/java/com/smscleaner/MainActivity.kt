@@ -120,6 +120,7 @@ class MainActivity : AppCompatActivity() {
         val perm = hasSmsPermission()
         val base = "Default SMS app: " + (if (def) "Yes" else "No") +
             "\nSMS permission: " + (if (perm) "granted" else "missing") +
+            "\nDetected: " + SmsRepository.diagnostics(this) +
             "\nLast run: " + store.lastRun.ifEmpty { "never" }
         tvStatus.text = base
         if (def && perm) {
