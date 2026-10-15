@@ -69,11 +69,11 @@ object SmsRepository {
         )
     }
 
-    /** Every inbox + sent message, newest first. */
+    /** Every inbox, sent, sending and failed message, newest first. */
     fun loadAll(ctx: Context): List<Sms> {
         val out = ArrayList<Sms>()
         ctx.contentResolver.query(
-            Telephony.Sms.CONTENT_URI, COLS, "type IN (1,2)", null, "date DESC"
+            Telephony.Sms.CONTENT_URI, COLS, "type IN (1,2,4,5,6)", null, "date DESC"
         )?.use { c ->
             while (c.moveToNext()) out.add(fromCursor(c))
         }
@@ -107,7 +107,7 @@ object SmsRepository {
             val boxOk = when (rule.box) {
                 Box.INBOX -> m.type == 1
                 Box.SENT -> m.type == 2
-                Box.ALL -> true
+                Box.ALL -> m.type == 1 || m.type == 2
             }
             boxOk &&
                 (rule.readState == ReadState.ANY ||

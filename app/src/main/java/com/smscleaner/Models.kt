@@ -10,13 +10,15 @@ enum class Category(val label: String, val blurb: String) {
     OTHER("Other", "Everything else from companies"),
 }
 
+data class ContactEntry(val name: String, val number: String)
+
 data class Sms(
     val id: Long,
     val address: String,
     val body: String,
     val date: Long,
     val read: Boolean,
-    val type: Int, // 1 = received, 2 = sent
+    val type: Int, // 1 received, 2 sent, 4 sending, 5 failed, 6 queued
     val category: Category,
 )
 

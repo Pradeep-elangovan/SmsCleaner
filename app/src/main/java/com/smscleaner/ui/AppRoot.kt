@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,7 @@ sealed interface Screen {
     data object Home : Screen
     data class Thread(val key: String) : Screen
     data class RuleEditor(val ruleId: String?, val template: Rule?) : Screen
+    data class NewMessage(val to: String, val body: String) : Screen
 }
 
 @Composable
@@ -64,6 +66,14 @@ fun AppRoot(vm: MainViewModel, actions: AppActions) {
 
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+
+    // Another app asked us to compose a message (Contacts, dialer, share sheet).
+    LaunchedEffect(vm.pendingCompose) {
+        vm.pendingCompose?.let { (to, body) ->
+            screen = Screen.NewMessage(to, body)
+            vm.consumeCompose()
+        }
+    }
 
     BackHandler(enabled = screen !is Screen.Home) { screen = Screen.Home }
 
@@ -80,7 +90,12 @@ fun AppRoot(vm: MainViewModel, actions: AppActions) {
         ) { padding ->
             val mod = Modifier.padding(padding)
             when (tab) {
-                0 -> MessagesTab(vm, actions, onOpen = { screen = Screen.Thread(it) }, modifier = mod)
+                0 -> MessagesTab(
+                    vm, actions,
+                    onOpen = { screen = Screen.Thread(it) },
+                    onCompose = { screen = Screen.NewMessage("", "") },
+                    modifier = mod,
+                )
                 1 -> CleanupTab(vm, actions, modifier = mod)
                 2 -> RulesTab(
                     vm, actions,
@@ -93,6 +108,11 @@ fun AppRoot(vm: MainViewModel, actions: AppActions) {
         }
         is Screen.Thread -> ThreadScreen(vm, actions, s.key, onBack = { screen = Screen.Home })
         is Screen.RuleEditor -> RuleEditorScreen(vm, s.ruleId, s.template, onClose = { screen = Screen.Home })
+        is Screen.NewMessage -> NewMessageScreen(
+            vm, actions, s.to, s.body,
+            onClose = { screen = Screen.Home },
+            onSent = { screen = Screen.Thread(it) },
+        )
     }
 }
 

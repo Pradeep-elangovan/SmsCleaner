@@ -6,6 +6,8 @@ clean them up in one tap, or save rules that run every day. Built with Jetpack C
 ## Features
 
 - **Messages**: conversation list with search and a thread view. Long-press to select and delete.
+- **Send**: reply inside any conversation with a person, or start a new message with contact suggestions.
+  "Send SMS" requests from Contacts and the dialer open the same screen. Messages show Sending / Not sent.
 - **Cleanup**: auto categories (OTPs, bank, offers, delivery, other) with age filters and one-tap clean.
 - **Rules**: filter by category, sender (exact, prefix, contains, regex), keywords, age, read state and folder.
   Live preview, quick templates, run now, or run daily at a time you choose.
@@ -29,8 +31,8 @@ clean them up in one tap, or save rules that run every day. Built with Jetpack C
 ## Things to know
 
 - **Deleting only works while this app is the default SMS app.** Daily runs are skipped otherwise.
-- While default, picture messages (MMS) aren't received and the app can't send SMS.
-  Switch your default back whenever you need to send or receive pictures.
+- While default, picture messages (MMS) aren't received or sent. Switch your default back whenever you need pictures.
+- Sending uses your phone's default SIM for SMS and normal carrier charges apply. Company senders (names like HDFCBK) can't be replied to.
 - RCS / "chat" messages are not touched.
 - Categories are heuristics based on sender and wording. Check the count before cleaning.
 - With "never delete contacts" on but contacts access denied, every message from a phone number is

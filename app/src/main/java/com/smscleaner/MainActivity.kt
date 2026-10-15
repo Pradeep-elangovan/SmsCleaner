@@ -19,6 +19,11 @@ import com.smscleaner.ui.AppRoot
 import com.smscleaner.ui.SmsCleanerTheme
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_TO = "compose_to"
+        const val EXTRA_BODY = "compose_body"
+    }
+
     private val vm: MainViewModel by viewModels()
     private var askedPermissions = false
 
@@ -43,6 +48,8 @@ class MainActivity : ComponentActivity() {
             toast = { msg -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show() },
         )
 
+        handleIntent(intent)
+
         setContent {
             SmsCleanerTheme {
                 AppRoot(vm, actions)
@@ -55,6 +62,19 @@ class MainActivity : ComponentActivity() {
         ) {
             notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(i: Intent?) {
+        if (i == null || !i.hasExtra(EXTRA_TO)) return
+        vm.requestCompose(i.getStringExtra(EXTRA_TO) ?: "", i.getStringExtra(EXTRA_BODY) ?: "")
+        i.removeExtra(EXTRA_TO)
+        i.removeExtra(EXTRA_BODY)
     }
 
     override fun onResume() {

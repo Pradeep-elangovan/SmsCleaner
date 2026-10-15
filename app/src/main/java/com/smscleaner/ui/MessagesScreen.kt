@@ -17,6 +17,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledIconButton
+import android.telephony.SmsMessage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.Close
@@ -69,6 +75,7 @@ fun MessagesTab(
     vm: MainViewModel,
     actions: AppActions,
     onOpen: (String) -> Unit,
+    onCompose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -90,7 +97,8 @@ fun MessagesTab(
         if (!selected.remove(key)) selected.add(key)
     }
 
-    Column(modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
         if (selecting) {
             SelectionBar(
                 count = selected.size,
@@ -138,6 +146,15 @@ fun MessagesTab(
                 }
             }
         }
+    }
+    if (!selecting) {
+        ExtendedFloatingActionButton(
+            onClick = onCompose,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            text = { Text("New message") },
+        )
+    }
     }
 
     if (confirmDelete) {
@@ -290,6 +307,22 @@ fun ThreadScreen(vm: MainViewModel, actions: AppActions, key: String, onBack: ()
     val anyProtected = vm.protection.isProtected(conv.address)
 
     Scaffold(
+        bottomBar = {
+            if (!selecting) {
+                if (Sender.isNumeric(conv.address)) {
+                    Composer(vm, actions, conv.address)
+                } else {
+                    Surface(tonalElevation = 3.dp) {
+                        Text(
+                            "Company senders can't receive replies.",
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -385,7 +418,7 @@ fun ThreadScreen(vm: MainViewModel, actions: AppActions, key: String, onBack: ()
 
 @Composable
 private fun Bubble(m: Sms, selected: Boolean, selecting: Boolean, onToggle: () -> Unit) {
-    val sent = m.type == 2
+    val sent = m.type != 1
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
@@ -412,6 +445,18 @@ private fun Bubble(m: Sms, selected: Boolean, selecting: Boolean, onToggle: () -
                     style = MaterialTheme.typography.labelSmall,
                     color = LocalContentColorAlpha(),
                 )
+                val status = when (m.type) {
+                    4, 6 -> "Sending..."
+                    5 -> "Not sent"
+                    else -> null
+                }
+                if (status != null) {
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (m.type == 5) MaterialTheme.colorScheme.error else LocalContentColorAlpha(),
+                    )
+                }
             }
         }
     }
@@ -420,3 +465,51 @@ private fun Bubble(m: Sms, selected: Boolean, selecting: Boolean, onToggle: () -
 @Composable
 private fun LocalContentColorAlpha() =
     androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.65f)
+
+@Composable
+private fun Composer(vm: MainViewModel, actions: AppActions, to: String) {
+    var text by rememberSaveable { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    val parts = remember(text) { if (text.isEmpty()) 0 else SmsMessage.calculateLength(text, false)[0] }
+
+    Surface(tonalElevation = 3.dp) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Message") },
+                    maxLines = 5,
+                    shape = RoundedCornerShape(24.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                FilledIconButton(
+                    onClick = {
+                        if (!vm.hasSendPermission) {
+                            actions.toast("Allow SMS permission, then tap send again")
+                            actions.requestPermissions()
+                        } else {
+                            sending = true
+                            vm.sendMessage(to, text) { err ->
+                                sending = false
+                                if (err == null) text = "" else actions.toast(err)
+                            }
+                        }
+                    },
+                    enabled = text.isNotBlank() && !sending,
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                }
+            }
+            if (parts > 1) {
+                Text(
+                    "$parts SMS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                )
+            }
+        }
+    }
+}

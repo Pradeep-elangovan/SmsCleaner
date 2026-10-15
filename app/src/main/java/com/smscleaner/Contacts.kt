@@ -11,10 +11,11 @@ object Contacts {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) ==
             PackageManager.PERMISSION_GRANTED
 
-    /** Map of normalized phone key (last 10 digits) to contact name. Empty without permission. */
-    fun load(ctx: Context): Map<String, String> {
-        if (!hasPermission(ctx)) return emptyMap()
-        val out = HashMap<String, String>()
+    /** All contacts with a phone number, sorted by name, one entry per number. */
+    fun loadEntries(ctx: Context): List<ContactEntry> {
+        if (!hasPermission(ctx)) return emptyList()
+        val seen = HashSet<String>()
+        val out = ArrayList<ContactEntry>()
         try {
             ctx.contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -28,12 +29,20 @@ object Contacts {
                     val number = c.getString(0) ?: continue
                     val name = c.getString(1) ?: continue
                     val key = Sender.key(number)
-                    if (key.isNotEmpty() && key != "unknown") out.putIfAbsent(key, name)
+                    if (key.isNotEmpty() && key != "unknown" && seen.add(key)) {
+                        out.add(ContactEntry(name, number.trim()))
+                    }
                 }
             }
         } catch (e: Exception) {
             // unreadable contacts: treated as no contacts
         }
-        return out
+        return out.sortedBy { it.name.lowercase() }
     }
+
+    fun toKeyMap(entries: List<ContactEntry>): Map<String, String> =
+        entries.associate { Sender.key(it.number) to it.name }
+
+    /** Map of normalized phone key (last 10 digits) to contact name. Empty without permission. */
+    fun load(ctx: Context): Map<String, String> = toKeyMap(loadEntries(ctx))
 }

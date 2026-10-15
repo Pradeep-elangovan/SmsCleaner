@@ -2,12 +2,18 @@ package com.smscleaner
 
 import android.app.Application
 import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Telephony
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -23,6 +29,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var hasContactsPermission by mutableStateOf(false)
         private set
+    var hasSendPermission by mutableStateOf(false)
+        private set
     var diagnostics by mutableStateOf("")
         private set
 
@@ -34,6 +42,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var conversations by mutableStateOf<List<Conversation>>(emptyList())
         private set
     var protection by mutableStateOf(Protection.EMPTY)
+        private set
+    var contactEntries by mutableStateOf<List<ContactEntry>>(emptyList())
+        private set
+
+    /** Set when another app asks us to compose a message (number, text). */
+    var pendingCompose by mutableStateOf<Pair<String, String>?>(null)
         private set
 
     // ---- settings ----
@@ -54,7 +68,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val ready: Boolean get() = isDefault && hasSmsPermission
 
+    private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) = scheduleReload()
+    }
+    private var observerJob: Job? = null
+
+    /** Refreshes shortly after the SMS store changes (new message, send status, edits). */
+    private fun scheduleReload() {
+        observerJob?.cancel()
+        observerJob = viewModelScope.launch {
+            delay(600)
+            if (ready) reload()
+        }
+    }
+
+    override fun onCleared() {
+        try {
+            appCtx.contentResolver.unregisterContentObserver(observer)
+        } catch (e: Exception) {
+            // already gone
+        }
+    }
+
     init {
+        try {
+            appCtx.contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, observer)
+        } catch (e: Exception) {
+            // live refresh is optional
+        }
         // Earlier versions kept copies of deleted messages. Remove any that are left over.
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -71,6 +112,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         isDefault = SmsRepository.isDefault(appCtx)
         hasSmsPermission = SmsRepository.hasReadPermission(appCtx)
         hasContactsPermission = Contacts.hasPermission(appCtx)
+        hasSendPermission = SmsSender.hasPermission(appCtx)
         diagnostics = SmsRepository.diagnostics(appCtx)
         rules = store.load()
         protectedSenders = store.protectedSenders
@@ -87,13 +129,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loading = true
         viewModelScope.launch(Dispatchers.IO) {
             var all: List<Sms> = emptyList()
-            var contacts: Map<String, String> = emptyMap()
+            var entries: List<ContactEntry> = emptyList()
             try {
                 all = SmsRepository.loadAll(appCtx)
-                contacts = Contacts.load(appCtx)
+                entries = Contacts.loadEntries(appCtx)
             } catch (e: Exception) {
                 // leave empty; the UI shows an empty state
             }
+            val contacts = Contacts.toKeyMap(entries)
             val convs = Conversations.build(all, contacts)
             val prot = Protection.load(appCtx, contacts)
             withContext(Dispatchers.Main) {
@@ -101,6 +144,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     messages = all
                     conversations = convs
                     protection = prot
+                    contactEntries = entries
                     loading = false
                 }
             }
@@ -148,6 +192,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 reload()
             }
         }
+    }
+
+    // ---- sending ----
+
+    /** [onDone] gets null on success or an error message. The list reloads before it is called. */
+    fun sendMessage(to: String, body: String, onDone: (String?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val err = try {
+                SmsSender.send(appCtx, to, body)
+            } catch (e: Exception) {
+                "Failed to send: ${e.message}"
+            }
+            withContext(Dispatchers.Main) {
+                reload() // first, so a screen opened by onDone sees the loading state
+                onDone(err)
+            }
+        }
+    }
+
+    fun requestCompose(to: String, body: String) {
+        pendingCompose = to to body
+    }
+
+    fun consumeCompose() {
+        pendingCompose = null
     }
 
     // ---- rules ----
