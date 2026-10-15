@@ -20,7 +20,13 @@ object CleanupRunner {
         }
     }
 
-    /** Runs every enabled rule. Backs messages up to CSV before deleting them. */
+    /** Backs the messages up to CSV, then deletes them. If the backup throws, nothing is deleted. */
+    fun deleteWithBackup(ctx: Context, label: String, msgs: List<Sms>): Int {
+        SmsRepository.backup(ctx, label, msgs)
+        return SmsRepository.delete(ctx, msgs)
+    }
+
+    /** Runs every enabled rule. Protected senders are never touched. */
     fun runAll(ctx: Context): RunResult {
         val app = ctx.applicationContext
         val result = try {
@@ -38,18 +44,21 @@ object CleanupRunner {
             return RunResult(0, emptyList(), "Not the default SMS app, so nothing was deleted.")
         }
         val rules = RuleStore(ctx).load().filter { it.enabled && it.isSafe() }
+        val protection = Protection.load(ctx)
+        var all = SmsRepository.loadAll(ctx)
         var total = 0
         val per = mutableListOf<Pair<String, Int>>()
         for (rule in rules) {
-            val matches = SmsRepository.findMatches(ctx, rule)
+            val matches = SmsRepository.applyRule(rule, all, protection)
             if (matches.isEmpty()) {
                 per.add(rule.name to 0)
                 continue
             }
-            SmsRepository.backup(ctx, rule.name, matches) // backup first; if it throws, nothing is deleted
-            val n = SmsRepository.delete(ctx, matches)
+            val n = deleteWithBackup(ctx, rule.name, matches)
             total += n
             per.add(rule.name to n)
+            val gone = matches.map { it.id }.toHashSet()
+            all = all.filter { it.id !in gone }
         }
         return RunResult(total, per)
     }

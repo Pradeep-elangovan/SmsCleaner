@@ -14,7 +14,7 @@ import androidx.core.content.ContextCompat
 object Notifier {
     private const val CHANNEL = "sms_cleaner"
 
-    fun post(ctx: Context, title: String, text: String, id: Int, openInbox: Boolean = false) {
+    fun post(ctx: Context, title: String, text: String, id: Int) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -26,8 +26,7 @@ object Notifier {
                 NotificationChannel(CHANNEL, "SMS Cleaner", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
-        val target = if (openInbox) InboxActivity::class.java else MainActivity::class.java
-        val intent = Intent(ctx, target).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val intent = Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pi = PendingIntent.getActivity(
             ctx, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )

@@ -37,6 +37,19 @@ class RuleStore(context: Context) {
         save(load().filter { it.id != id })
     }
 
+    var protectedSenders: List<String>
+        get() = try {
+            val a = JSONArray(prefs.getString("protectedSenders", "[]") ?: "[]")
+            (0 until a.length()).map { a.getString(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        set(v) = prefs.edit().putString("protectedSenders", JSONArray(v).toString()).apply()
+
+    var protectContacts: Boolean
+        get() = prefs.getBoolean("protectContacts", true)
+        set(v) = prefs.edit().putBoolean("protectContacts", v).apply()
+
     var scheduleEnabled: Boolean
         get() = prefs.getBoolean("scheduleEnabled", false)
         set(v) = prefs.edit().putBoolean("scheduleEnabled", v).apply()

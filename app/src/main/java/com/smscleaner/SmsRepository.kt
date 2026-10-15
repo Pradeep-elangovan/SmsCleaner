@@ -1,30 +1,27 @@
 package com.smscleaner
 
-import android.content.Context
-import android.database.Cursor
+import android.Manifest
 import android.app.role.RoleManager
+import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.provider.Telephony
+import androidx.core.content.ContextCompat
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.ArrayList
 import java.util.Date
 import java.util.Locale
 
-data class Sms(
-    val id: Long,
-    val address: String,
-    val body: String,
-    val date: Long,
-    val read: Boolean,
-    val type: Int,
-)
-
 object SmsRepository {
     private val COLS = arrayOf("_id", "address", "body", "date", "read", "type")
     private const val DAY_MS = 24L * 60 * 60 * 1000
+
+    // ---- default-app detection (three independent sources) ----
 
     private fun telephonyDefault(ctx: Context): String? = try {
         Telephony.Sms.getDefaultSmsPackage(ctx)
@@ -46,106 +43,103 @@ object SmsRepository {
         null
     }
 
-    /** True if any of the three system sources says this app is the default SMS app. */
     fun isDefault(ctx: Context): Boolean {
         val me = ctx.packageName
         return telephonyDefault(ctx) == me || roleHeld(ctx) || settingDefault(ctx) == me
     }
 
-    /** Short text showing what each source reports, for troubleshooting. */
     fun diagnostics(ctx: Context): String =
         "telephony=" + (telephonyDefault(ctx) ?: "null") +
             ", role=" + roleHeld(ctx) +
             ", setting=" + (settingDefault(ctx) ?: "null")
 
-    private fun fromCursor(c: Cursor): Sms = Sms(
-        id = c.getLong(0),
-        address = c.getString(1) ?: "",
-        body = c.getString(2) ?: "",
-        date = c.getLong(3),
-        read = c.getInt(4) == 1,
-        type = c.getInt(5),
-    )
+    fun hasReadPermission(ctx: Context): Boolean =
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_SMS) ==
+            PackageManager.PERMISSION_GRANTED
 
-    /** Number of inbox + sent messages the app can see, or -1 if reading failed. */
-    fun count(ctx: Context): Int = try {
-        ctx.contentResolver.query(
-            Telephony.Sms.CONTENT_URI, arrayOf("_id"), "type IN (1,2)", null, null
-        )?.use { it.count } ?: -1
-    } catch (e: Exception) {
-        -1
+    // ---- reading ----
+
+    private fun fromCursor(c: Cursor): Sms {
+        val address = c.getString(1) ?: ""
+        val body = c.getString(2) ?: ""
+        return Sms(
+            id = c.getLong(0),
+            address = address,
+            body = body,
+            date = c.getLong(3),
+            read = c.getInt(4) == 1,
+            type = c.getInt(5),
+            category = Classifier.classify(address, body),
+        )
     }
 
-    /** Latest inbox + sent messages, newest first. */
-    fun recent(ctx: Context, limit: Int): List<Sms> {
+    /** Every inbox + sent message, newest first. */
+    fun loadAll(ctx: Context): List<Sms> {
         val out = ArrayList<Sms>()
         ctx.contentResolver.query(
             Telephony.Sms.CONTENT_URI, COLS, "type IN (1,2)", null, "date DESC"
         )?.use { c ->
-            while (out.size < limit && c.moveToNext()) out.add(fromCursor(c))
+            while (c.moveToNext()) out.add(fromCursor(c))
         }
         return out
     }
 
-    /** Messages that [rule] would delete. Never deletes anything itself. */
-    fun findMatches(ctx: Context, rule: Rule, now: Long = System.currentTimeMillis()): List<Sms> {
+    // ---- rule matching (pure, in memory) ----
+
+    /** Messages in [all] that [rule] would delete. Protected senders are always skipped. */
+    fun applyRule(
+        rule: Rule,
+        all: List<Sms>,
+        protection: Protection,
+        now: Long = System.currentTimeMillis(),
+    ): List<Sms> {
         if (!rule.isSafe()) return emptyList()
 
-        val senderRegex: Regex? = if (rule.senderMode == SenderMode.REGEX) {
+        val regex: Regex? = if (rule.senderMode == SenderMode.REGEX && rule.sender.isNotBlank()) {
             try {
                 Regex(rule.sender, RegexOption.IGNORE_CASE)
             } catch (e: Exception) {
-                return emptyList() // invalid regex must match nothing, never everything
+                return emptyList() // an invalid regex must match nothing, never everything
             }
         } else null
 
-        val where = StringBuilder()
-        val args = ArrayList<String>()
-        when (rule.box) {
-            Box.INBOX -> where.append("type = 1")
-            Box.SENT -> where.append("type = 2")
-            Box.ALL -> where.append("type IN (1,2)")
-        }
-        when (rule.readState) {
-            ReadState.READ -> where.append(" AND read = 1")
-            ReadState.UNREAD -> where.append(" AND read = 0")
-            ReadState.ANY -> {}
-        }
-        if (rule.olderThanDays > 0) {
-            where.append(" AND date < ?")
-            args.add((now - rule.olderThanDays * DAY_MS).toString())
-        }
-
+        val cutoff = if (rule.olderThanDays > 0) now - rule.olderThanDays * DAY_MS else Long.MAX_VALUE
         val keywords = rule.keywordList()
-        val out = ArrayList<Sms>()
-        ctx.contentResolver.query(
-            Telephony.Sms.CONTENT_URI, COLS, where.toString(),
-            if (args.isEmpty()) null else args.toTypedArray(), "date DESC"
-        )?.use { c ->
-            while (c.moveToNext()) {
-                val m = fromCursor(c)
-                if (!senderMatches(rule, senderRegex, m.address)) continue
-                if (keywords.isNotEmpty() && keywords.none { m.body.contains(it, ignoreCase = true) }) continue
-                out.add(m)
+        val sender = rule.sender.trim()
+
+        return all.filter { m ->
+            val boxOk = when (rule.box) {
+                Box.INBOX -> m.type == 1
+                Box.SENT -> m.type == 2
+                Box.ALL -> true
             }
+            boxOk &&
+                (rule.readState == ReadState.ANY ||
+                    (rule.readState == ReadState.READ && m.read) ||
+                    (rule.readState == ReadState.UNREAD && !m.read)) &&
+                m.date < cutoff &&
+                (rule.category == null || m.category == rule.category) &&
+                senderMatches(rule.senderMode, sender, regex, m.address) &&
+                (keywords.isEmpty() || keywords.any { m.body.contains(it, ignoreCase = true) }) &&
+                !protection.isProtected(m.address)
         }
-        return out
     }
 
-    private fun senderMatches(rule: Rule, regex: Regex?, address: String): Boolean {
-        if (rule.senderMode == SenderMode.ANY || rule.sender.isBlank()) return true
-        val s = rule.sender.trim()
-        return when (rule.senderMode) {
-            SenderMode.EXACT -> address.equals(s, ignoreCase = true)
-            SenderMode.PREFIX -> address.startsWith(s, ignoreCase = true)
-            SenderMode.CONTAINS -> address.contains(s, ignoreCase = true)
+    private fun senderMatches(mode: SenderMode, sender: String, regex: Regex?, address: String): Boolean {
+        if (mode == SenderMode.ANY || sender.isBlank()) return true
+        return when (mode) {
+            SenderMode.EXACT -> address.equals(sender, ignoreCase = true)
+            SenderMode.PREFIX -> address.startsWith(sender, ignoreCase = true)
+            SenderMode.CONTAINS -> address.contains(sender, ignoreCase = true)
             SenderMode.REGEX -> regex?.containsMatchIn(address) == true
             SenderMode.ANY -> true
         }
     }
 
+    // ---- writing ----
+
     /** Appends the messages to a CSV in app storage so deletions can be recovered. */
-    fun backup(ctx: Context, ruleName: String, msgs: List<Sms>) {
+    fun backup(ctx: Context, label: String, msgs: List<Sms>) {
         if (msgs.isEmpty()) return
         val f = File(ctx.filesDir, "deleted_backup.csv")
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
@@ -154,7 +148,7 @@ object SmsRepository {
         for (m in msgs) {
             sb.append(csv(fmt.format(Date(m.date)))).append(',')
                 .append(csv(m.address)).append(',')
-                .append(csv(ruleName)).append(',')
+                .append(csv(label)).append(',')
                 .append(csv(m.body)).append('\n')
         }
         f.appendText(sb.toString())
@@ -169,5 +163,19 @@ object SmsRepository {
             n += ctx.contentResolver.delete(Uri.parse("content://sms/${m.id}"), null, null)
         }
         return n
+    }
+
+    fun markRead(ctx: Context, ids: List<Long>) {
+        val values = ContentValues().apply {
+            put(Telephony.Sms.READ, 1)
+            put(Telephony.Sms.SEEN, 1)
+        }
+        for (id in ids) {
+            try {
+                ctx.contentResolver.update(Uri.parse("content://sms/$id"), values, null, null)
+            } catch (e: Exception) {
+                // ignore single failures
+            }
+        }
     }
 }

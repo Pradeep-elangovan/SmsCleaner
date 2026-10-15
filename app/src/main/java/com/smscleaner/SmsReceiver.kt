@@ -33,6 +33,6 @@ class SmsReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             // nothing sensible to do in a receiver
         }
-        Notifier.post(context, address, body, id = 1000 + (address.hashCode() and 0xFFF), openInbox = true)
+        Notifier.post(context, address, body, id = 1000 + (address.hashCode() and 0xFFF))
     }
 }

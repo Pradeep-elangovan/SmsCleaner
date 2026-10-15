@@ -8,7 +8,7 @@ enum class ReadState { ANY, READ, UNREAD }
 enum class Box { INBOX, SENT, ALL }
 
 const val BROAD_RULE_MSG =
-    "Add at least one of: a sender, message keywords, or an age in days. " +
+    "Add at least one of: a category, a sender, message keywords, or an age in days. " +
         "A rule that matches every message is not allowed."
 
 data class Rule(
@@ -21,10 +21,12 @@ data class Rule(
     val olderThanDays: Int = 0,       // 0 = ignore age
     val readState: ReadState = ReadState.ANY,
     val box: Box = Box.INBOX,
+    val category: Category? = null,   // null = any category
 ) {
     /** A rule must narrow things down somehow, otherwise it would delete everything. */
     fun isSafe(): Boolean =
-        (senderMode != SenderMode.ANY && sender.isNotBlank()) ||
+        category != null ||
+            (senderMode != SenderMode.ANY && sender.isNotBlank()) ||
             keywords.isNotBlank() ||
             olderThanDays > 0
 
@@ -33,6 +35,7 @@ data class Rule(
 
     fun summary(): String {
         val parts = mutableListOf<String>()
+        if (category != null) parts.add(category.label)
         if (senderMode != SenderMode.ANY && sender.isNotBlank()) {
             parts.add("sender ${senderMode.name.lowercase()} \"$sender\"")
         }
@@ -40,7 +43,7 @@ data class Rule(
         if (olderThanDays > 0) parts.add("older than $olderThanDays days")
         if (readState != ReadState.ANY) parts.add(readState.name.lowercase())
         parts.add(box.name.lowercase())
-        return parts.joinToString(", ")
+        return parts.joinToString(" - ")
     }
 
     fun toJson(): JSONObject = JSONObject().apply {
@@ -53,6 +56,7 @@ data class Rule(
         put("olderThanDays", olderThanDays)
         put("readState", readState.name)
         put("box", box.name)
+        put("category", category?.name ?: "")
     }
 
     companion object {
@@ -66,6 +70,11 @@ data class Rule(
             olderThanDays = o.optInt("olderThanDays", 0),
             readState = enumOr(o.optString("readState"), ReadState.ANY),
             box = enumOr(o.optString("box"), Box.INBOX),
+            category = try {
+                Category.valueOf(o.optString("category", ""))
+            } catch (e: Exception) {
+                null
+            },
         )
 
         private inline fun <reified T : Enum<T>> enumOr(s: String, default: T): T =

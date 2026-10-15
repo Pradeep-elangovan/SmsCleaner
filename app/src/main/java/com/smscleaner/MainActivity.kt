@@ -2,90 +2,54 @@ package com.smscleaner
 
 import android.Manifest
 import android.app.TimePickerDialog
-import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.provider.Telephony
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.ListView
-import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
+import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.smscleaner.ui.AppActions
+import com.smscleaner.ui.AppRoot
+import com.smscleaner.ui.SmsCleanerTheme
 import java.io.File
-import java.util.Locale
 
-class MainActivity : AppCompatActivity() {
-    private lateinit var store: RuleStore
-    private lateinit var tvStatus: TextView
-    private lateinit var btnDefault: Button
-    private lateinit var btnTime: Button
-    private lateinit var lvRules: ListView
-    private var rules: List<Rule> = emptyList()
+class MainActivity : ComponentActivity() {
+    private val vm: MainViewModel by viewModels()
+    private var askedPermissions = false
 
     private val roleLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refresh() }
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { vm.refreshStatus() }
+    private val permLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.refreshStatus() }
     private val notifLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    private val smsPermLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refresh() }
-    private var askedSmsPerm = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        store = RuleStore(this)
 
-        tvStatus = findViewById(R.id.tvStatus)
-        btnDefault = findViewById(R.id.btnDefault)
-        btnTime = findViewById(R.id.btnTime)
-        lvRules = findViewById(R.id.lvRules)
-        val swSchedule = findViewById<SwitchCompat>(R.id.swSchedule)
+        val actions = AppActions(
+            requestDefault = { requestDefault() },
+            requestPermissions = { requestPermissions() },
+            requestContacts = { requestContacts() },
+            shareBackup = { shareBackup() },
+            openDefaultSettings = { openDefaultSettings() },
+            pickTime = { h, m, onPicked ->
+                TimePickerDialog(this, { _, hh, mm -> onPicked(hh, mm) }, h, m, true).show()
+            },
+            toast = { msg -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show() },
+        )
 
-        swSchedule.isChecked = store.scheduleEnabled
-        swSchedule.setOnCheckedChangeListener { _, on ->
-            store.scheduleEnabled = on
-            Scheduler.apply(this)
-        }
-
-        btnTime.setOnClickListener {
-            TimePickerDialog(this, { _, h, m ->
-                store.runHour = h
-                store.runMinute = m
-                refresh()
-                Scheduler.apply(this)
-            }, store.runHour, store.runMinute, true).show()
-        }
-
-        btnDefault.setOnClickListener {
-            if (SmsRepository.isDefault(this)) {
-                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-            } else {
-                requestDefault()
+        setContent {
+            SmsCleanerTheme {
+                AppRoot(vm, actions)
             }
-        }
-
-        findViewById<Button>(R.id.btnInbox).setOnClickListener {
-            startActivity(Intent(this, InboxActivity::class.java))
-        }
-        findViewById<Button>(R.id.btnAdd).setOnClickListener {
-            startActivity(Intent(this, RuleEditorActivity::class.java))
-        }
-        findViewById<Button>(R.id.btnRun).setOnClickListener { confirmRun() }
-        findViewById<Button>(R.id.btnBackup).setOnClickListener { shareBackup() }
-
-        lvRules.setOnItemClickListener { _, _, position, _ ->
-            startActivity(
-                Intent(this, RuleEditorActivity::class.java).putExtra("id", rules[position].id)
-            )
         }
 
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -98,93 +62,56 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refresh()
-        if (SmsRepository.isDefault(this) && !hasSmsPermission() && !askedSmsPerm) {
-            askedSmsPerm = true
-            smsPermLauncher.launch(
-                arrayOf(
-                    Manifest.permission.READ_SMS,
-                    Manifest.permission.RECEIVE_SMS,
-                    Manifest.permission.SEND_SMS,
-                )
-            )
+        vm.refreshStatus()
+        // Ask for SMS permissions once, as soon as we are the default app.
+        if (vm.isDefault && !vm.hasSmsPermission && !askedPermissions) {
+            askedPermissions = true
+            requestPermissions()
         }
-    }
-
-    private fun hasSmsPermission() =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) ==
-            PackageManager.PERMISSION_GRANTED
-
-    private fun refresh() {
-        val def = SmsRepository.isDefault(this)
-        val perm = hasSmsPermission()
-        val base = "Default SMS app: " + (if (def) "Yes" else "No") +
-            "\nSMS permission: " + (if (perm) "granted" else "missing") +
-            "\nDetected: " + SmsRepository.diagnostics(this) +
-            "\nLast run: " + store.lastRun.ifEmpty { "never" }
-        tvStatus.text = base
-        if (def && perm) {
-            Thread {
-                val n = SmsRepository.count(applicationContext)
-                runOnUiThread {
-                    tvStatus.text = base + "\nMessages visible to app: " +
-                        (if (n < 0) "error reading" else n.toString())
-                }
-            }.start()
-        }
-        btnDefault.text = if (def) "Change default SMS app" else "Set as default SMS app"
-        btnTime.text = String.format(Locale.US, "%02d:%02d", store.runHour, store.runMinute)
-        rules = store.load()
-        lvRules.adapter = ArrayAdapter(
-            this, android.R.layout.simple_list_item_1,
-            rules.map { (if (it.enabled) "[on]  " else "[off] ") + it.name + "\n" + it.summary() }
-        )
     }
 
     private fun requestDefault() {
         if (Build.VERSION.SDK_INT >= 29) {
-            val rm = getSystemService(RoleManager::class.java)
-            if (rm.isRoleAvailable(RoleManager.ROLE_SMS) && !rm.isRoleHeld(RoleManager.ROLE_SMS)) {
-                roleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_SMS))
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_SMS) &&
+                !rm.isRoleHeld(android.app.role.RoleManager.ROLE_SMS)
+            ) {
+                roleLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_SMS))
+                return
             }
-        } else {
-            val i = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
-                .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-            roleLauncher.launch(i)
         }
+        val i = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+            .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+        roleLauncher.launch(i)
     }
 
-    private fun confirmRun() {
-        if (!SmsRepository.isDefault(this)) {
-            toast("Set this app as the default SMS app first.")
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Run all enabled rules now?")
-            .setMessage("Matching messages will be permanently deleted. A CSV backup is kept in the app.")
-            .setPositiveButton("Run") { _, _ -> runNow() }
-            .setNegativeButton("Cancel", null)
-            .show()
+    private fun requestPermissions() {
+        permLauncher.launch(
+            arrayOf(
+                Manifest.permission.READ_SMS,
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.SEND_SMS,
+                Manifest.permission.READ_CONTACTS,
+            )
+        )
     }
 
-    private fun runNow() {
-        Thread {
-            val r = CleanupRunner.runAll(applicationContext)
-            runOnUiThread {
-                AlertDialog.Builder(this)
-                    .setTitle("Done")
-                    .setMessage(r.summary())
-                    .setPositiveButton("OK", null)
-                    .show()
-                refresh()
-            }
-        }.start()
+    private fun requestContacts() {
+        permLauncher.launch(arrayOf(Manifest.permission.READ_CONTACTS))
+    }
+
+    private fun openDefaultSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
     }
 
     private fun shareBackup() {
         val f = File(filesDir, "deleted_backup.csv")
         if (!f.exists()) {
-            toast("No backup yet - nothing has been deleted.")
+            Toast.makeText(this, "No backup yet - nothing has been deleted.", Toast.LENGTH_LONG).show()
             return
         }
         val uri = FileProvider.getUriForFile(this, "$packageName.files", f)
@@ -195,6 +122,4 @@ class MainActivity : AppCompatActivity() {
         }
         startActivity(Intent.createChooser(send, "Share backup"))
     }
-
-    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 }
