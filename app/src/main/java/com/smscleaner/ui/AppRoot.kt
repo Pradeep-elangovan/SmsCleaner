@@ -81,7 +81,7 @@ fun AppRoot(vm: MainViewModel, actions: AppActions) {
         ) { padding ->
             val mod = Modifier.padding(padding)
             when (tab) {
-                0 -> MessagesTab(vm, onOpen = { screen = Screen.Thread(it) }, modifier = mod)
+                0 -> MessagesTab(vm, actions, onOpen = { screen = Screen.Thread(it) }, modifier = mod)
                 1 -> CleanupTab(vm, actions, modifier = mod)
                 2 -> RulesTab(
                     vm, actions,

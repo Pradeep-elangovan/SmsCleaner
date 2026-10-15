@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -61,7 +65,12 @@ import com.smscleaner.Sender
 import com.smscleaner.Sms
 
 @Composable
-fun MessagesTab(vm: MainViewModel, onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
+fun MessagesTab(
+    vm: MainViewModel,
+    actions: AppActions,
+    onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var query by rememberSaveable { mutableStateOf("") }
     val q = query.trim()
     val list = remember(vm.conversations, q) {
@@ -72,9 +81,29 @@ fun MessagesTab(vm: MainViewModel, onOpen: (String) -> Unit, modifier: Modifier 
                 c.messages.any { it.body.contains(q, ignoreCase = true) }
         }
     }
+    val selected = remember { mutableStateListOf<String>() }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val selecting = selected.isNotEmpty()
+    BackHandler(enabled = selecting) { selected.clear() }
+
+    fun toggle(key: String) {
+        if (!selected.remove(key)) selected.add(key)
+    }
 
     Column(modifier.fillMaxSize()) {
-        ScreenHeader("Messages", "${vm.conversations.size} conversations")
+        if (selecting) {
+            SelectionBar(
+                count = selected.size,
+                onClose = { selected.clear() },
+                onSelectAll = {
+                    selected.clear()
+                    selected.addAll(list.map { it.key })
+                },
+                onDelete = { confirmDelete = true },
+            )
+        } else {
+            ScreenHeader("Messages", "${vm.conversations.size} conversations - long-press to select")
+        }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -99,26 +128,96 @@ fun MessagesTab(vm: MainViewModel, onOpen: (String) -> Unit, modifier: Modifier 
                 EmptyState(if (q.isEmpty()) "No messages found" else "No results for \"$q\"")
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(list, key = { it.key }) { c ->
-                    ConversationRow(c, q) { onOpen(c.key) }
+                    ConversationRow(
+                        c = c,
+                        q = q,
+                        selected = selected.contains(c.key),
+                        onClick = { if (selecting) toggle(c.key) else onOpen(c.key) },
+                        onLongClick = { toggle(c.key) },
+                    )
                 }
             }
+        }
+    }
+
+    if (confirmDelete) {
+        val chosen = vm.conversations.filter { selected.contains(it.key) }
+        val msgs = chosen.flatMap { it.messages }
+        val protectedCount = chosen.count { vm.protection.isProtected(it.address) }
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete ${msgs.size} messages?") },
+            text = {
+                Text(
+                    "All messages in ${chosen.size} conversation(s) will be removed from your phone. " +
+                        (if (protectedCount > 0)
+                            "$protectedCount of them is protected from automatic cleanup, but manual delete overrides that. "
+                        else "") +
+                        "A copy is saved in the app backup first."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    vm.deleteMessages(msgs, "Manual delete") { n ->
+                        actions.toast(if (n < 0) "Delete failed" else "Deleted $n message(s)")
+                        selected.clear()
+                    }
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun SelectionBar(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, onDelete: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Cancel selection") }
+            Text(
+                "$count selected",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            IconButton(onClick = onSelectAll) { Icon(Icons.Filled.Check, contentDescription = "Select all shown") }
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete selected") }
         }
     }
 }
 
 @Composable
-private fun ConversationRow(c: Conversation, q: String, onClick: () -> Unit) {
+private fun ConversationRow(
+    c: Conversation,
+    q: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     val matched = if (q.isEmpty()) null else c.messages.firstOrNull { it.body.contains(q, ignoreCase = true) }
     val preview = (matched ?: c.last).body.replace('\n', ' ')
     val unread = c.unread > 0
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(c.title, c.key)
+        if (selected) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.onPrimary)
+            }
+        } else {
+            Avatar(c.title, c.key)
+        }
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -202,7 +301,7 @@ fun ThreadScreen(vm: MainViewModel, actions: AppActions, key: String, onBack: ()
                         )
                         if (!selecting) {
                             Text(
-                                if (anyProtected) "${conv.address} - protected" else conv.address,
+                                if (anyProtected) "${conv.address} - protected" else "${conv.address} - long-press to select",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
