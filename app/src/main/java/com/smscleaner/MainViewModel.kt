@@ -31,6 +31,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var hasSendPermission by mutableStateOf(false)
         private set
+    var hasPhoneStatePermission by mutableStateOf(false)
+        private set
+    var sims by mutableStateOf<List<SimInfo>>(emptyList())
+        private set
+    var selectedSubId by mutableStateOf(-1)
+        private set
     var diagnostics by mutableStateOf("")
         private set
 
@@ -113,6 +119,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         hasSmsPermission = SmsRepository.hasReadPermission(appCtx)
         hasContactsPermission = Contacts.hasPermission(appCtx)
         hasSendPermission = SmsSender.hasPermission(appCtx)
+        hasPhoneStatePermission = Sims.hasPermission(appCtx)
+        sims = Sims.list(appCtx)
+        selectedSubId = Sims.resolve(sims, store.simSubId)
         diagnostics = SmsRepository.diagnostics(appCtx)
         rules = store.load()
         protectedSenders = store.protectedSenders
@@ -198,9 +207,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** [onDone] gets null on success or an error message. The list reloads before it is called. */
     fun sendMessage(to: String, body: String, onDone: (String?) -> Unit) {
+        val sub = selectedSubId
         viewModelScope.launch(Dispatchers.IO) {
             val err = try {
-                SmsSender.send(appCtx, to, body)
+                SmsSender.send(appCtx, to, body, sub)
             } catch (e: Exception) {
                 "Failed to send: ${e.message}"
             }
@@ -209,6 +219,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 onDone(err)
             }
         }
+    }
+
+    fun selectSim(subId: Int) {
+        store.simSubId = subId
+        selectedSubId = subId
     }
 
     fun requestCompose(to: String, body: String) {

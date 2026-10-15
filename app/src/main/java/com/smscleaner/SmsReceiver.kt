@@ -27,6 +27,8 @@ class SmsReceiver : BroadcastReceiver() {
             put(Telephony.Sms.READ, 0)
             put(Telephony.Sms.SEEN, 0)
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
+            val sub = intent.getIntExtra("subscription", -1)
+            if (sub >= 0) put(Telephony.Sms.SUBSCRIPTION_ID, sub)
         }
         try {
             context.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)

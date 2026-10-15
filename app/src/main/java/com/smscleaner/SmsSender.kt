@@ -25,12 +25,22 @@ object SmsSender {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.SEND_SMS) ==
             PackageManager.PERMISSION_GRANTED
 
-    private fun smsManager(ctx: Context): SmsManager? =
-        if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java)
-        else @Suppress("DEPRECATION") SmsManager.getDefault()
+    /** The SmsManager for [subId], or for the system default SIM when [subId] is negative. */
+    private fun smsManager(ctx: Context, subId: Int): SmsManager? = try {
+        if (Build.VERSION.SDK_INT >= 31) {
+            val base = ctx.getSystemService(SmsManager::class.java)
+            if (subId >= 0) base?.createForSubscriptionId(subId) else base
+        } else if (subId >= 0) {
+            @Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId(subId)
+        } else {
+            @Suppress("DEPRECATION") SmsManager.getDefault()
+        }
+    } catch (e: Exception) {
+        null
+    }
 
     /** Returns null when the message was handed to the network, or a short error for the user. */
-    fun send(ctx: Context, to: String, body: String): String? {
+    fun send(ctx: Context, to: String, body: String, subId: Int = -1): String? {
         val dest = to.trim()
         val text = body.trim()
         if (dest.isEmpty()) return "Enter a phone number."
@@ -38,7 +48,7 @@ object SmsSender {
         if (dest.any { it.isLetter() } || dest.none { it.isDigit() }) return "Enter a valid phone number."
         if (!SmsRepository.isDefault(ctx)) return "Set this app as the default SMS app to send."
         if (!hasPermission(ctx)) return "SMS permission is missing."
-        val sm = smsManager(ctx) ?: return "Sending is not available on this device."
+        val sm = smsManager(ctx, subId) ?: return "Sending is not available. Check the selected SIM."
 
         val values = ContentValues().apply {
             put(Telephony.Sms.ADDRESS, dest)
@@ -47,6 +57,7 @@ object SmsSender {
             put(Telephony.Sms.READ, 1)
             put(Telephony.Sms.SEEN, 1)
             put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_OUTBOX)
+            if (subId >= 0) put(Telephony.Sms.SUBSCRIPTION_ID, subId)
         }
         val uri = ctx.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
             ?: return "Could not save the message."

@@ -50,6 +50,16 @@ class RuleStore(context: Context) {
         get() = prefs.getBoolean("protectContacts", true)
         set(v) = prefs.edit().putBoolean("protectContacts", v).apply()
 
+    /** Subscription id of the SIM used for sending. -1 = system default. */
+    var simSubId: Int
+        get() = prefs.getInt("simSubId", -1)
+        set(v) = prefs.edit().putInt("simSubId", v).apply()
+
+    /** True once we have asked for the phone-state permission (so we only ask once on our own). */
+    var simPermAsked: Boolean
+        get() = prefs.getBoolean("simPermAsked", false)
+        set(v) = prefs.edit().putBoolean("simPermAsked", v).apply()
+
     var scheduleEnabled: Boolean
         get() = prefs.getBoolean("scheduleEnabled", false)
         set(v) = prefs.edit().putBoolean("scheduleEnabled", v).apply()

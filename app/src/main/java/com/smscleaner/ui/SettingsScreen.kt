@@ -80,6 +80,37 @@ fun SettingsTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Mod
             }
         }
 
+        SettingsCard("SIM for sending") {
+            when {
+                !vm.hasPhoneStatePermission -> {
+                    Text(
+                        "Allow SIM access to choose which SIM sends your messages on a dual-SIM phone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    OutlinedButton(onClick = actions.requestSim, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Allow SIM access")
+                    }
+                }
+                vm.sims.size < 2 -> Text(
+                    "Only one SIM detected. Messages are sent with it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                else -> {
+                    Text(
+                        "Your choice is remembered. You can also switch it while writing a message.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                    SimPicker(vm)
+                }
+            }
+        }
+
         SettingsCard("Protection") {
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

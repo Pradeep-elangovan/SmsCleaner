@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
             requestDefault = { requestDefault() },
             requestPermissions = { requestPermissions() },
             requestContacts = { requestContacts() },
+            requestSim = { requestSim() },
             openDefaultSettings = { openDefaultSettings() },
             pickTime = { h, m, onPicked ->
                 TimePickerDialog(this, { _, hh, mm -> onPicked(hh, mm) }, h, m, true).show()
@@ -85,6 +86,12 @@ class MainActivity : ComponentActivity() {
             askedPermissions = true
             requestPermissions()
         }
+        // Ask once for SIM access (needed to list SIMs) when this is a dual-SIM phone or we can't tell.
+        val store = RuleStore(this)
+        if (vm.isDefault && vm.hasSmsPermission && !vm.hasPhoneStatePermission && !store.simPermAsked) {
+            store.simPermAsked = true
+            requestSim()
+        }
     }
 
     private fun requestDefault() {
@@ -109,8 +116,14 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.RECEIVE_SMS,
                 Manifest.permission.SEND_SMS,
                 Manifest.permission.READ_CONTACTS,
+                Manifest.permission.READ_PHONE_STATE,
             )
         )
+        RuleStore(this).simPermAsked = true
+    }
+
+    private fun requestSim() {
+        permLauncher.launch(arrayOf(Manifest.permission.READ_PHONE_STATE))
     }
 
     private fun requestContacts() {

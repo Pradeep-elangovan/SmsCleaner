@@ -474,6 +474,7 @@ private fun Composer(vm: MainViewModel, actions: AppActions, to: String) {
 
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            SimPicker(vm, Modifier.padding(bottom = 6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 OutlinedTextField(
                     value = text,

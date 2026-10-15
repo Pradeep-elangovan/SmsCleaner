@@ -4,6 +4,8 @@ package com.smscleaner.ui
 
 import android.telephony.SmsMessage
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -137,6 +140,8 @@ fun NewMessageScreen(
                 )
             }
 
+            SimPicker(vm, Modifier.padding(top = 12.dp))
+
             Button(
                 onClick = {
                     if (!vm.hasSendPermission) {
@@ -161,6 +166,26 @@ fun NewMessageScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+/** "Send with" chips. Only shown on phones with two or more active SIMs. */
+@Composable
+fun SimPicker(vm: MainViewModel, modifier: Modifier = Modifier) {
+    if (vm.sims.size < 2) return
+    Row(
+        modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Send with", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        vm.sims.forEach { sim ->
+            FilterChip(
+                selected = sim.subId == vm.selectedSubId,
+                onClick = { vm.selectSim(sim.subId) },
+                label = { Text("SIM ${sim.slot + 1} \u00B7 ${sim.name}", maxLines = 1) },
             )
         }
     }
