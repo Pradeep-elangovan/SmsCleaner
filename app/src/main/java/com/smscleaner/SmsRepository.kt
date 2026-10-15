@@ -134,9 +134,6 @@ object SmsRepository {
 
     // ---- writing ----
 
-    /** Saves a short-lived copy (see [Backup]) before deletion. */
-    fun backup(ctx: Context, label: String, msgs: List<Sms>) = Backup.add(ctx, label, msgs)
-
     /** Deletes the given messages. Works only while this app is the default SMS app. */
     fun delete(ctx: Context, msgs: List<Sms>): Int {
         var n = 0

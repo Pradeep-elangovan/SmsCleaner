@@ -44,7 +44,6 @@ class AppActions(
     val requestDefault: () -> Unit,
     val requestPermissions: () -> Unit,
     val requestContacts: () -> Unit,
-    val shareBackup: () -> Unit,
     val openDefaultSettings: () -> Unit,
     val pickTime: (Int, Int, (Int, Int) -> Unit) -> Unit,
     val toast: (String) -> Unit,

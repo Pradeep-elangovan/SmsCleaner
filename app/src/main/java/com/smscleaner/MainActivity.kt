@@ -14,7 +14,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import com.smscleaner.ui.AppActions
 import com.smscleaner.ui.AppRoot
 import com.smscleaner.ui.SmsCleanerTheme
@@ -37,7 +36,6 @@ class MainActivity : ComponentActivity() {
             requestDefault = { requestDefault() },
             requestPermissions = { requestPermissions() },
             requestContacts = { requestContacts() },
-            shareBackup = { shareBackup() },
             openDefaultSettings = { openDefaultSettings() },
             pickTime = { h, m, onPicked ->
                 TimePickerDialog(this, { _, hh, mm -> onPicked(hh, mm) }, h, m, true).show()
@@ -105,20 +103,5 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             startActivity(Intent(Settings.ACTION_SETTINGS))
         }
-    }
-
-    private fun shareBackup() {
-        val f = Backup.exportCsv(this)
-        if (f == null) {
-            Toast.makeText(this, "No backup to share.", Toast.LENGTH_LONG).show()
-            return
-        }
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", f)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/csv"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        startActivity(Intent.createChooser(send, "Share backup"))
     }
 }

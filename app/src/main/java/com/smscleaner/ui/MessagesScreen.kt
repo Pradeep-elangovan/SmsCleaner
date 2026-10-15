@@ -153,13 +153,13 @@ fun MessagesTab(
                         (if (protectedCount > 0)
                             "$protectedCount of them is protected from automatic cleanup, but manual delete overrides that. "
                         else "") +
-                        vm.backupNote
+                        "This cannot be undone."
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    vm.deleteMessages(msgs, "Manual delete") { n ->
+                    vm.deleteMessages(msgs) { n ->
                         actions.toast(if (n < 0) "Delete failed" else "Deleted $n message(s)")
                         selected.clear()
                     }
@@ -367,12 +367,12 @@ fun ThreadScreen(vm: MainViewModel, actions: AppActions, key: String, onBack: ()
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete ${chosen.size} message(s)?") },
             text = {
-                Text("They will be removed from your phone. ${vm.backupNote}")
+                Text("They will be removed from your phone. This cannot be undone.")
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    vm.deleteMessages(chosen, "Manual delete") { n ->
+                    vm.deleteMessages(chosen) { n ->
                         actions.toast(if (n < 0) "Delete failed" else "Deleted $n message(s)")
                         selected.clear()
                     }

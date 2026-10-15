@@ -65,7 +65,7 @@ fun CleanupTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Modi
             Text(
                 "Categories are automatic guesses based on the sender and wording, so check the count before cleaning. " +
                     "Messages from contacts and protected senders are never deleted. " +
-                    vm.backupNote,
+                    "Deleting cannot be undone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -139,13 +139,13 @@ private fun CleanupCard(vm: MainViewModel, actions: AppActions, cat: Category) {
             text = {
                 Text(
                     "${cat.label} $ageText will be removed from your phone. " +
-                        vm.backupNote
+                        "This cannot be undone."
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
-                    vm.deleteMessages(matches, "Quick clean: ${cat.label}") { n ->
+                    vm.deleteMessages(matches) { n ->
                         actions.toast(if (n < 0) "Delete failed" else "Deleted $n message(s)")
                     }
                 }) { Text("Delete", fontWeight = FontWeight.Bold) }

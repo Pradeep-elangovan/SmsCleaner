@@ -51,19 +51,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var lastRun by mutableStateOf("")
         private set
-    var backupDays by mutableStateOf(30)
-        private set
-    var backupCount by mutableStateOf(0)
-        private set
-    var backupBytes by mutableStateOf(0L)
-        private set
-
-    /** One-line description of what happens to deleted messages, for confirmation dialogs. */
-    val backupNote: String
-        get() = if (backupDays > 0) "A copy is kept for $backupDays days so you can recover it."
-        else "Backup is off, so this cannot be undone."
 
     val ready: Boolean get() = isDefault && hasSmsPermission
+
+    init {
+        // Earlier versions kept copies of deleted messages. Remove any that are left over.
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                appCtx.filesDir.listFiles()
+                    ?.filter { it.name.startsWith("deleted_backup") }
+                    ?.forEach { it.delete() }
+            } catch (e: Exception) {
+                // best effort
+            }
+        }
+    }
 
     fun refreshStatus() {
         isDefault = SmsRepository.isDefault(appCtx)
@@ -77,7 +79,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         runHour = store.runHour
         runMinute = store.runMinute
         lastRun = store.lastRun
-        backupDays = store.backupDays
         if (ready) reload()
     }
 
@@ -101,7 +102,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     conversations = convs
                     protection = prot
                     loading = false
-                    refreshBackupStats()
                 }
             }
         }
@@ -124,11 +124,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Backs up then deletes. [onDone] gets the number deleted, or -1 on failure. */
-    fun deleteMessages(msgs: List<Sms>, label: String, onDone: (Int) -> Unit) {
+    /** Deletes the messages. [onDone] gets the number deleted, or -1 on failure. */
+    fun deleteMessages(msgs: List<Sms>, onDone: (Int) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val n = try {
-                CleanupRunner.deleteWithBackup(appCtx, label, msgs)
+                SmsRepository.delete(appCtx, msgs)
             } catch (e: Exception) {
                 -1
             }
@@ -204,35 +204,5 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         store.protectContacts = on
         protectContacts = on
         rebuildProtection()
-    }
-
-    // ---- backup ----
-
-    private fun refreshBackupStats() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val stats = try {
-                Backup.purge(appCtx)
-                Backup.stats(appCtx)
-            } catch (e: Exception) {
-                0 to 0L
-            }
-            withContext(Dispatchers.Main) {
-                backupCount = stats.first
-                backupBytes = stats.second
-            }
-        }
-    }
-
-    fun updateBackupDays(days: Int) {
-        store.backupDays = days
-        backupDays = days
-        refreshBackupStats()
-    }
-
-    fun clearBackup() {
-        viewModelScope.launch(Dispatchers.IO) {
-            Backup.clear(appCtx)
-            withContext(Dispatchers.Main) { refreshBackupStats() }
-        }
     }
 }
