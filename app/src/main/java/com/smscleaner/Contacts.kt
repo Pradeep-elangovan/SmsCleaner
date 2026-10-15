@@ -3,6 +3,7 @@ package com.smscleaner
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
 
@@ -45,4 +46,19 @@ object Contacts {
 
     /** Map of normalized phone key (last 10 digits) to contact name. Empty without permission. */
     fun load(ctx: Context): Map<String, String> = toKeyMap(loadEntries(ctx))
+
+    /** Contact name for a single number (used by notifications), or null if unknown / no permission. */
+    fun nameFor(ctx: Context, number: String): String? {
+        if (!hasPermission(ctx) || !Sender.isNumeric(number)) return null
+        return try {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)
+            )
+            ctx.contentResolver.query(
+                uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
