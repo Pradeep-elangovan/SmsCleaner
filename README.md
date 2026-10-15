@@ -1,34 +1,40 @@
 # SMS Cleaner
 
-Android app that deletes SMS by rules (sender, keywords, age, read state) and can run the rules daily.
+Android app that tidies your SMS: browse conversations, search, auto-sort messages into categories,
+clean them up in one tap, or save rules that run every day. Built with Jetpack Compose.
 
-**Status: written but never compiled or run.** Expect to fix a typo or two on the first build.
+## Features
 
-## Get the APK (no Android Studio needed)
+- **Messages**: conversation list with search and a thread view. Long-press to select and delete.
+- **Cleanup**: auto categories (OTPs, bank, offers, delivery, other) with age filters and one-tap clean.
+- **Rules**: filter by category, sender (exact, prefix, contains, regex), keywords, age, read state and folder.
+  Live preview, quick templates, run now, or run daily at a time you choose.
+- **Protection**: never delete messages from your contacts or from senders you protect (lock icon in a thread).
+- **Backup**: every deleted message is saved to a CSV first (Settings, Share backup file).
 
-1. Create a new GitHub repository and upload this whole folder (including the hidden `.github` folder).
-2. Open the **Actions** tab, then **Build APK**, then **Run workflow** (it also runs on every push).
-3. When it finishes, open the run and download the **SmsCleaner-apk** artifact. Unzip it to get `app-debug.apk`.
-4. If the build fails, open the failed step and send me the red error lines.
+## Get the APK
 
-Or with Android Studio (JDK 17): open this folder, then Build > Build APK(s).
-The debug APK is signed with a debug key and installs fine for personal use.
+1. Push to GitHub. The **Build APK** workflow runs on every push (or run it by hand in the Actions tab).
+2. Open the latest green run, then download the **SmsCleaner-apk** artifact and unzip it.
+3. Install `app-debug.apk`. Updates install over the old version (the signing key is fixed in the repo).
 
-## Install and set up (you and your relatives)
+## Set up on the phone
 
-1. Send the APK and tap it on the phone. Allow "Install unknown apps" for the app you opened it from.
+1. Install the APK. Allow "Install unknown apps" for the app you opened it from.
+   If Play Protect blocks it (India blocks sideloaded apps that read SMS), see the notes below.
 2. **Android 13+:** Settings > Apps > SMS Cleaner > three-dot menu > **Allow restricted settings**.
-3. Open SMS Cleaner, tap **Set as default SMS app**, and approve.
-4. Add a rule, tap **Preview matches** to see what it would delete, then save.
-5. Tap **Run now**, or switch on **Run rules daily at** and pick a time.
+3. Open the app and follow the two setup steps: set as default SMS app, then allow SMS and contacts access.
 
 ## Things to know
 
-- **Deleting only works while this app is the default SMS app.** Daily runs are skipped (with a notification) otherwise.
-- **While default, picture messages (MMS) are not received** and the app cannot send SMS. Use the Inbox button to read messages. Switch the default back whenever you need to send.
+- **Deleting only works while this app is the default SMS app.** Daily runs are skipped otherwise.
+- While default, picture messages (MMS) aren't received and the app can't send SMS.
+  Switch your default back whenever you need to send or receive pictures.
 - RCS / "chat" messages are not touched.
-- A rule needs a sender, keywords or an age. Rules that would match everything are refused, and a bad regex matches nothing.
-- Before every deletion, the messages are appended to a CSV (use **Share backup**). Deletion from the phone itself is permanent.
-- Sender regex does a partial match, so anchor it (`^AX-.*BK$`) if you need a full match.
-- Xiaomi, Oppo, Vivo and similar phones may need battery optimisation turned off for the app, or the daily job may not fire.
-- Rules are stored as JSON in SharedPreferences (no Room), to keep the build simple.
+- Categories are heuristics based on sender and wording. Check the count before cleaning.
+- With "never delete contacts" on but contacts access denied, every message from a phone number is
+  protected, so only company senders can be cleaned.
+- A rule needs a category, sender, keywords or an age. Rules that would match everything are refused,
+  and an invalid regex matches nothing.
+- Xiaomi, Oppo, Vivo and similar phones may need battery optimisation turned off for the daily run.
+- The debug signing key is committed on purpose so updates work. Fine for personal use; keep the repo private.
