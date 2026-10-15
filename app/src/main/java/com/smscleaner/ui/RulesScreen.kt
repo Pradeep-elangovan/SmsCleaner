@@ -91,7 +91,7 @@ fun RulesTab(
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
-                            Switch(checked = vm.scheduleEnabled, onCheckedChange = { vm.setScheduleEnabled(it) })
+                            Switch(checked = vm.scheduleEnabled, onCheckedChange = { vm.updateSchedule(it) })
                         }
                         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {

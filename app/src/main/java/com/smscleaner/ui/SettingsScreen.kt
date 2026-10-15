@@ -90,7 +90,7 @@ fun SettingsTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Mod
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = vm.protectContacts, onCheckedChange = { vm.setProtectContacts(it) })
+                Switch(checked = vm.protectContacts, onCheckedChange = { vm.updateProtectContacts(it) })
             }
             if (vm.protectContacts && !vm.hasContactsPermission) {
                 Text(

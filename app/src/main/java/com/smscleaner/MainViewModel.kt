@@ -151,7 +151,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleRule(rule: Rule, enabled: Boolean) = saveRule(rule.copy(enabled = enabled))
 
-    fun setScheduleEnabled(on: Boolean) {
+    fun updateSchedule(on: Boolean) {
         store.scheduleEnabled = on
         scheduleEnabled = on
         Scheduler.apply(appCtx)
@@ -187,7 +187,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         rebuildProtection()
     }
 
-    fun setProtectContacts(on: Boolean) {
+    fun updateProtectContacts(on: Boolean) {
         store.protectContacts = on
         protectContacts = on
         rebuildProtection()
