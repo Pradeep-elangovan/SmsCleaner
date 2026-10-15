@@ -25,9 +25,23 @@ android {
         }
     }
 
+    // Release signing for Google Play. The upload key lives only in GitHub secrets, never in the repo.
+    val uploadStore = System.getenv("UPLOAD_KEYSTORE_PATH")
+    if (uploadStore != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(uploadStore)
+                storePassword = System.getenv("UPLOAD_STORE_PASSWORD")
+                keyAlias = "upload"
+                keyPassword = System.getenv("UPLOAD_STORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (uploadStore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
