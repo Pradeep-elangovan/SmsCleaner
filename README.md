@@ -32,7 +32,7 @@ clean them up in one tap, or save rules that run every day. Built with Jetpack C
 
 - **Deleting only works while this app is the default SMS app.** Daily runs are skipped otherwise.
 - While default, picture messages (MMS) aren't received or sent. Switch your default back whenever you need pictures.
-- Sending uses your phone's default SIM for SMS and normal carrier charges apply. Company senders (names like HDFCBK) can't be replied to.
+- On dual-SIM phones pick the sending SIM in Settings or while writing (needs SIM access permission); single-SIM phones just use their SIM. Normal carrier charges apply. Company senders (names like HDFCBK) can't be replied to.
 - RCS / "chat" messages are not touched.
 - Categories are heuristics based on sender and wording. Check the count before cleaning.
 - With "never delete contacts" on but contacts access denied, every message from a phone number is
