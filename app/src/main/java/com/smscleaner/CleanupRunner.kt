@@ -20,7 +20,7 @@ object CleanupRunner {
         }
     }
 
-    /** Backs the messages up to CSV, then deletes them. If the backup throws, nothing is deleted. */
+    /** Backs the messages up (if enabled), then deletes them. If the backup throws, nothing is deleted. */
     fun deleteWithBackup(ctx: Context, label: String, msgs: List<Sms>): Int {
         SmsRepository.backup(ctx, label, msgs)
         return SmsRepository.delete(ctx, msgs)
@@ -33,6 +33,11 @@ object CleanupRunner {
             doRun(app)
         } catch (e: Exception) {
             RunResult(0, emptyList(), "Error: ${e.message}")
+        }
+        try {
+            Backup.purge(app)
+        } catch (e: Exception) {
+            // expiry is best effort
         }
         RuleStore(app).lastRun =
             SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date()) + " - " + result.summary()

@@ -18,7 +18,6 @@ import androidx.core.content.FileProvider
 import com.smscleaner.ui.AppActions
 import com.smscleaner.ui.AppRoot
 import com.smscleaner.ui.SmsCleanerTheme
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -109,9 +108,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shareBackup() {
-        val f = File(filesDir, "deleted_backup.csv")
-        if (!f.exists()) {
-            Toast.makeText(this, "No backup yet - nothing has been deleted.", Toast.LENGTH_LONG).show()
+        val f = Backup.exportCsv(this)
+        if (f == null) {
+            Toast.makeText(this, "No backup to share.", Toast.LENGTH_LONG).show()
             return
         }
         val uri = FileProvider.getUriForFile(this, "$packageName.files", f)

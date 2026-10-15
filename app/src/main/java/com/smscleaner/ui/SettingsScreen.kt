@@ -2,6 +2,8 @@
 
 package com.smscleaner.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,10 +13,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.smscleaner.Backup
 import com.smscleaner.MainViewModel
 
 @Composable
@@ -61,6 +67,7 @@ private fun StatusLine(label: String, ok: Boolean) {
 @Composable
 fun SettingsTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Modifier) {
     var newSender by remember { mutableStateOf("") }
+    var confirmClear by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         ScreenHeader("Settings")
@@ -141,15 +148,46 @@ fun SettingsTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Mod
             }
         }
 
-        SettingsCard("Backup") {
+        SettingsCard("Backup of deleted messages") {
             Text(
-                "Every message is saved to a file inside the app before it is deleted. " +
-                    "Share the file to keep or review it.",
+                "Deleted messages are kept in the app for a limited time in case you change your mind, " +
+                    "then removed automatically. It never grows past ${Backup.MAX_ENTRIES} messages.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 6.dp),
             )
-            OutlinedButton(onClick = actions.shareBackup, modifier = Modifier.padding(top = 8.dp)) {
-                Text("Share backup file")
+            Row(
+                Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(0 to "Off", 7 to "7 days", 30 to "30 days", 90 to "90 days").forEach { (d, label) ->
+                    FilterChip(
+                        selected = vm.backupDays == d,
+                        onClick = { vm.updateBackupDays(d) },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Text(
+                if (vm.backupDays == 0) "Backup is off. Deleted messages cannot be recovered, and turning it off cleared any existing backup."
+                else "Holding ${vm.backupCount} messages (${formatSize(vm.backupBytes)}).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = actions.shareBackup, enabled = vm.backupBytes > 0) { Text("Share as CSV") }
+                OutlinedButton(onClick = { confirmClear = true }, enabled = vm.backupBytes > 0) { Text("Clear now") }
+            }
+            if (confirmClear) {
+                AlertDialog(
+                    onDismissRequest = { confirmClear = false },
+                    title = { Text("Clear the backup?") },
+                    text = { Text("The saved copies of deleted messages will be removed for good.") },
+                    confirmButton = {
+                        TextButton(onClick = { confirmClear = false; vm.clearBackup() }) { Text("Clear") }
+                    },
+                    dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+                )
             }
         }
 
@@ -162,4 +200,10 @@ fun SettingsTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Mod
             )
         }
     }
+}
+
+private fun formatSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
 }

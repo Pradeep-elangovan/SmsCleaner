@@ -153,7 +153,7 @@ fun MessagesTab(
                         (if (protectedCount > 0)
                             "$protectedCount of them is protected from automatic cleanup, but manual delete overrides that. "
                         else "") +
-                        "A copy is saved in the app backup first."
+                        vm.backupNote
                 )
             },
             confirmButton = {
@@ -367,7 +367,7 @@ fun ThreadScreen(vm: MainViewModel, actions: AppActions, key: String, onBack: ()
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete ${chosen.size} message(s)?") },
             text = {
-                Text("They will be removed from your phone. A copy is saved in the app backup first (Settings, Share backup).")
+                Text("They will be removed from your phone. ${vm.backupNote}")
             },
             confirmButton = {
                 TextButton(onClick = {

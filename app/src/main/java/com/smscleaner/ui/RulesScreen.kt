@@ -177,7 +177,7 @@ fun RulesTab(
         AlertDialog(
             onDismissRequest = { confirmRun = false },
             title = { Text("Run $enabledCount rule(s) now?") },
-            text = { Text("Matching messages will be deleted. A backup copy is saved first, and protected senders are skipped.") },
+            text = { Text("Matching messages will be deleted and protected senders are skipped. ${vm.backupNote}") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmRun = false

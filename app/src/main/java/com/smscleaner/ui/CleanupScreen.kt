@@ -65,7 +65,7 @@ fun CleanupTab(vm: MainViewModel, actions: AppActions, modifier: Modifier = Modi
             Text(
                 "Categories are automatic guesses based on the sender and wording, so check the count before cleaning. " +
                     "Messages from contacts and protected senders are never deleted. " +
-                    "A backup of everything deleted is kept in the app.",
+                    vm.backupNote,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -139,7 +139,7 @@ private fun CleanupCard(vm: MainViewModel, actions: AppActions, cat: Category) {
             text = {
                 Text(
                     "${cat.label} $ageText will be removed from your phone. " +
-                        "A copy is saved in the app backup first."
+                        vm.backupNote
                 )
             },
             confirmButton = {

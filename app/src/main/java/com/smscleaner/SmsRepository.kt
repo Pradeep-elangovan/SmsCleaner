@@ -11,11 +11,7 @@ import android.os.Build
 import android.provider.Settings
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
-import java.io.File
-import java.text.SimpleDateFormat
 import java.util.ArrayList
-import java.util.Date
-import java.util.Locale
 
 object SmsRepository {
     private val COLS = arrayOf("_id", "address", "body", "date", "read", "type")
@@ -138,23 +134,8 @@ object SmsRepository {
 
     // ---- writing ----
 
-    /** Appends the messages to a CSV in app storage so deletions can be recovered. */
-    fun backup(ctx: Context, label: String, msgs: List<Sms>) {
-        if (msgs.isEmpty()) return
-        val f = File(ctx.filesDir, "deleted_backup.csv")
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-        val sb = StringBuilder()
-        if (!f.exists()) sb.append("date,sender,rule,message\n")
-        for (m in msgs) {
-            sb.append(csv(fmt.format(Date(m.date)))).append(',')
-                .append(csv(m.address)).append(',')
-                .append(csv(label)).append(',')
-                .append(csv(m.body)).append('\n')
-        }
-        f.appendText(sb.toString())
-    }
-
-    private fun csv(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
+    /** Saves a short-lived copy (see [Backup]) before deletion. */
+    fun backup(ctx: Context, label: String, msgs: List<Sms>) = Backup.add(ctx, label, msgs)
 
     /** Deletes the given messages. Works only while this app is the default SMS app. */
     fun delete(ctx: Context, msgs: List<Sms>): Int {

@@ -10,7 +10,8 @@ clean them up in one tap, or save rules that run every day. Built with Jetpack C
 - **Rules**: filter by category, sender (exact, prefix, contains, regex), keywords, age, read state and folder.
   Live preview, quick templates, run now, or run daily at a time you choose.
 - **Protection**: never delete messages from your contacts or from senders you protect (lock icon in a thread).
-- **Backup**: every deleted message is saved to a CSV first (Settings, Share backup file).
+- **Backup**: deleted messages are kept briefly for recovery (7, 30 or 90 days, or off), then removed automatically,
+  and never more than 5,000 at once. Share as CSV from Settings.
 
 ## Get the APK
 

@@ -50,6 +50,11 @@ class RuleStore(context: Context) {
         get() = prefs.getBoolean("protectContacts", true)
         set(v) = prefs.edit().putBoolean("protectContacts", v).apply()
 
+    /** Days to keep deleted messages for recovery. 0 = backup off. */
+    var backupDays: Int
+        get() = prefs.getInt("backupDays", 30)
+        set(v) = prefs.edit().putInt("backupDays", v).apply()
+
     var scheduleEnabled: Boolean
         get() = prefs.getBoolean("scheduleEnabled", false)
         set(v) = prefs.edit().putBoolean("scheduleEnabled", v).apply()

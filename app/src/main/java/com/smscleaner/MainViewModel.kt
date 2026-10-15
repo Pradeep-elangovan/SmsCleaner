@@ -51,6 +51,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var lastRun by mutableStateOf("")
         private set
+    var backupDays by mutableStateOf(30)
+        private set
+    var backupCount by mutableStateOf(0)
+        private set
+    var backupBytes by mutableStateOf(0L)
+        private set
+
+    /** One-line description of what happens to deleted messages, for confirmation dialogs. */
+    val backupNote: String
+        get() = if (backupDays > 0) "A copy is kept for $backupDays days so you can recover it."
+        else "Backup is off, so this cannot be undone."
 
     val ready: Boolean get() = isDefault && hasSmsPermission
 
@@ -66,6 +77,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         runHour = store.runHour
         runMinute = store.runMinute
         lastRun = store.lastRun
+        backupDays = store.backupDays
         if (ready) reload()
     }
 
@@ -89,6 +101,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     conversations = convs
                     protection = prot
                     loading = false
+                    refreshBackupStats()
                 }
             }
         }
@@ -191,5 +204,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         store.protectContacts = on
         protectContacts = on
         rebuildProtection()
+    }
+
+    // ---- backup ----
+
+    private fun refreshBackupStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val stats = try {
+                Backup.purge(appCtx)
+                Backup.stats(appCtx)
+            } catch (e: Exception) {
+                0 to 0L
+            }
+            withContext(Dispatchers.Main) {
+                backupCount = stats.first
+                backupBytes = stats.second
+            }
+        }
+    }
+
+    fun updateBackupDays(days: Int) {
+        store.backupDays = days
+        backupDays = days
+        refreshBackupStats()
+    }
+
+    fun clearBackup() {
+        viewModelScope.launch(Dispatchers.IO) {
+            Backup.clear(appCtx)
+            withContext(Dispatchers.Main) { refreshBackupStats() }
+        }
     }
 }
